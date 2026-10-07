@@ -46,11 +46,43 @@ tgl_cetak = st.sidebar.text_input("Tanggal Cetak", value="05-10-2026")
 jabatan = st.sidebar.text_input("Jabatan", value="MANAGER")
 nama_manager = st.sidebar.text_input("Nama Manager (Dicetak Tebal)", value="MARTONO AJI PRABOWO")
 
+
 # ================= 2. FUNGSI EKSTRAKSI DATA DARI .ICONPRN =================
+def tentukan_petugas(idpel, tarif_daya, kddk):
+    """Mendeteksi kode petugas berdasarkan KDDK atau IDPEL khusus"""
+    daya = 0
+    match_daya = re.search(r'/(\d+)', str(tarif_daya))
+    if match_daya: 
+        daya = int(match_daya.group(1))
+    if daya > 33000: 
+        return "PLN"
+    
+    idpel_khusus = {
+        "524051069054": "c28", "524051263717": "c36", "524051265123": "c36", 
+        "524051104194": "c04", "524051000615": "c08", "524050867033": "c08"
+    }
+    if str(idpel) in idpel_khusus: 
+        return idpel_khusus[str(idpel)]
+        
+    if len(str(kddk)) >= 6:
+        kode_mid = str(kddk)[3:6].upper()
+        mapping_kddk = {
+            "JCA": "c01", "TAA": "c02", "JCB": "c03", "JCC": "c04", "NCD": "c05",
+            "KBA": "c06", "TAB": "c07", "JCE": "c08", "TAC": "c09", "MBB": "c10",
+            "KAD": "c11", "TAE": "c12", "KCF": "c13", "JCG": "c14", "TAF": "c15",
+            "KAG": "c16", "BBC": "c17", "TAH": "c18", "BCK": "c19", "NCH": "c20",
+            "JBE": "c21", "MBF": "c22", "MBG": "c23", "KBH": "c24", "KBI": "c25",
+            "KAI": "c26", "MCI": "c27", "KBJ": "c28", "JCJ": "c29", "TAJ": "c30",
+            "MBK": "c31", "KBL": "c32", "TAK": "c33", "KAL": "c34", "JCL": "c35",
+            "MBD": "c36", "KCJ": "c29", "NBJ": "c28", "TAI": "c26", "BBD": "c19",
+            "KCG": "c29", "MBM": "c23"
+        }
+        return mapping_kddk.get(kode_mid, "BARU")
+    return "BARU"
+
 def baca_data_dari_iconprn(teks_mentah):
     """Membaca isi file .iconprn dan mengubahnya menjadi format Tabel (List of Dictionaries)"""
     hasil = []
-    # Pisahkan setiap halaman berdasarkan keyword ini
     blok_halaman = re.split(r'PEMBERITAHUAN PELAKSANAAN PEMUTUSAN', teks_mentah)
     
     for blok in blok_halaman:
@@ -60,7 +92,7 @@ def baca_data_dari_iconprn(teks_mentah):
             'IDPEL': "", 'Nomor TUL': "", 'Nama': "", 'KDDK': "", 'Gardu/Tiang': "", 
             'Loket': "", 'Alamat': "", 'Nomor Meter': "", 'Tarif/Daya': "", 'Kelompok': "", 
             'Bulan Rekening': "", 'Bulan Keterlambatan': "", 'Jumlah Rekening': "0", 
-            'Jumlah Denda': "0", 'Jumlah Tunggakan': "0", 'petugas': "Pusat"
+            'Jumlah Denda': "0", 'Jumlah Tunggakan': "0", 'petugas': "BARU"
         }
         
         m_tul = re.search(r'NO\. TUL\s*:\s*([A-Z0-9/\-]+)', blok)
@@ -107,8 +139,48 @@ def baca_data_dari_iconprn(teks_mentah):
         if m_tung:
             data['Jumlah Tunggakan'] = m_tung.group(1).replace(',', '').replace('.', '').strip()
 
+        # Pemanggilan fungsi penentuan petugas
+        data['petugas'] = tentukan_petugas(data['IDPEL'], data['Tarif/Daya'], data['KDDK'])
+
         hasil.append(data)
     return hasil
+
+# ================= 2A. FUNGSI DETEKSI KOLOM EXCEL PINTAR =================
+STANDAR_KOLOM = {
+    "IDPEL": ["idpel", "id pelanggan", "id_pelanggan", "no pelanggan"],
+    "Nomor TUL": ["nomor tul", "no tul", "no. tul", "nomor_tul"],
+    "Nama": ["nama", "nama pelanggan", "nama_pelanggan"],
+    "KDDK": ["kddk", "kode kedudukan", "kedudukan"],
+    "Gardu/Tiang": ["gardu/tiang", "gardu", "nama gardu/tiang", "gardutiang", "tiang"],
+    "Loket": ["loket", "kode loket"],
+    "Alamat": ["alamat", "alamat pelanggan"],
+    "Nomor Meter": ["nomor meter", "no meter", "nomor_meter", "nomormeter"],
+    "Tarif/Daya": ["tarif/daya", "tarip / daya", "tarifdaya", "tarif", "daya"],
+    "Kelompok": ["kelompok", "klp"],
+    "Bulan Rekening": ["bulan rekening", "bulan_rekening", "rekening", "blth"],
+    "Bulan Keterlambatan": ["bulan keterlambatan", "bulan_keterlambatan", "keterlambatan"],
+    "Jumlah Rekening": ["jumlah rekening", "jumlah_rekening", "jumlah_rekening_", "rp rekening", "tagihan"],
+    "Jumlah Denda": ["jumlah denda", "jumlah_denda", "jumlah_denda_", "denda", "bk", "biaya keterlambatan"],
+    "Jumlah Tunggakan": ["jumlah tunggakan", "jumlah_tunggakan", "jumlah_tunggakan_", "total", "total tunggakan"],
+    "petugas": ["petugas", "kode petugas", "nama petugas", "cater"]
+}
+
+def deteksi_kolom_otomatis(df_cols):
+    mapping = {}
+    cols_lower = {c.strip().lower(): c for c in df_cols}
+    for target, kandidat_list in STANDAR_KOLOM.items():
+        found = None
+        for k in kandidat_list:
+            if k in cols_lower:
+                found = cols_lower[k]
+                break
+        if not found:
+            for c_low, c_orig in cols_lower.items():
+                if any(k in c_low for k in kandidat_list):
+                    found = c_orig
+                    break
+        mapping[target] = found
+    return mapping
 
 # ================= 3. FUNGSI GENERATOR FILE .ICONPRN =================
 def get_printer_init_code(printer_choice):
@@ -324,6 +396,7 @@ def buat_blangko_kosong(init_code, jml_lembar=50, page_lines=44):
     while len(lines) < page_lines:
         lines.append("")
     return ("\r\n".join(lines[:page_lines]) + "\r\n") * jml_lembar
+
 
 # ================= 4. HALAMAN UTAMA APLIKASI =================
 init_esc = get_printer_init_code(tipe_printer)
