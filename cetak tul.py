@@ -6,7 +6,7 @@ import re
 
 st.set_page_config(page_title="Cetak TUL VI-01 PLN ULP Tulung", layout="wide")
 
-st.title("⚡ Aplikasi Cetak TUL VI-01 (Super Presisi & Cepat)")
+st.title("⚡ Aplikasi Cetak TUL VI-01")
 st.caption("PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY - UP3 KLATEN - ULP TULUNG")
 
 # ================= 1. SIDEBAR PENGATURAN =================
