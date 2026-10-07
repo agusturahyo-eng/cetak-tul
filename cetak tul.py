@@ -5,7 +5,7 @@ import zipfile
 
 st.set_page_config(page_title="Cetak TUL VI-01 PLN ULP Tulung", layout="wide")
 
-st.title("⚡ Aplikasi Cetak TUL VI-01 (Pengganti Mail Merge)")
+st.title("⚡ Aplikasi Cetak TUL VI-01 (Super Cepat)")
 st.caption("PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY - UP3 KLATEN - ULP TULUNG")
 
 # ================= 1. SIDEBAR PENGATURAN =================
@@ -83,9 +83,9 @@ def deteksi_kolom_otomatis(df_cols):
 def get_printer_init_code(printer_choice):
     ESC = "\x1b"
     if "LQ-2190" in printer_choice:
-        return f"{ESC}g{ESC}0"         # 15 CPI (24-pin) + 1/8 inch line spacing
+        return f"{ESC}g{ESC}0"         # 15 CPI (24-pin) + 1/8 inch
     elif "17 CPI" in printer_choice:
-        return f"{ESC}P\x0f{ESC}0"     # 17 CPI Condensed (9-pin LX-310/LX-300+II) + 1/8 inch
+        return f"{ESC}P\x0f{ESC}0"     # 17 CPI Condensed (9-pin) + 1/8 inch
     else:
         return f"{ESC}M\x12{ESC}0"     # 12 CPI Elite (9-pin) + 1/8 inch
 
@@ -115,10 +115,10 @@ def ambil_nilai(row, col_map, key, default=""):
     return default
 
 def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, offset_x=0, offset_y=0, page_lines=44):
-    """Mencetak HANYA ISIAN DATA tepat di koordinat BLANKO.iconprn (Pengganti Mail Merge)"""
-    ESC = "\x1b"
-    BOLD_ON = f"{ESC}E"
-    BOLD_OFF = f"{ESC}F"
+    """Mencetak HANYA ISIAN DATA persis di koordinat BLANKO.iconprn"""
+    # KODE BOLD DIHAPUS AGAR CETAK 1-PASS (SUPER NGEBUT)
+    BOLD_ON = ""
+    BOLD_OFF = ""
 
     no_tul = ambil_nilai(row, col_map, "Nomor TUL")
     nama = ambil_nilai(row, col_map, "Nama")[:33]
@@ -163,9 +163,8 @@ def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, offset_
 
 def buat_blangko_dan_isi(row, col_map, init_code, kota, tgl, jab, manager, page_lines=44):
     """Mencetak Blangko + Isian sekaligus dalam 1x jalan"""
-    ESC = "\x1b"
-    BOLD_ON = f"{ESC}E"
-    BOLD_OFF = f"{ESC}F"
+    BOLD_ON = ""
+    BOLD_OFF = ""
 
     no_tul = ambil_nilai(row, col_map, "Nomor TUL")
     nama = ambil_nilai(row, col_map, "Nama")[:33]
@@ -232,9 +231,8 @@ def buat_blangko_dan_isi(row, col_map, init_code, kota, tgl, jab, manager, page_
     return "\r\n".join(lines[:page_lines]) + "\r\n"
 
 def buat_blangko_kosong(init_code, jml_lembar=50, page_lines=44):
-    ESC = "\x1b"
-    BOLD_ON = f"{ESC}E"
-    BOLD_OFF = f"{ESC}F"
+    BOLD_ON = ""
+    BOLD_OFF = ""
     lines = [
         f"{init_code}{BOLD_ON}PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY{BOLD_OFF}",
         "UP3 KLATEN                                                    NO. TUL :  ",
@@ -303,13 +301,12 @@ else:
         pilih_sheet = st.selectbox("Pilih Sheet Excel:", xls.sheet_names) if len(xls.sheet_names) > 1 else xls.sheet_names[0]
         df = pd.read_excel(uploaded_file, sheet_name=pilih_sheet)
 
-        # Auto-mapping kolom agar petugas tidak bingung jika nama header berubah
         auto_map = deteksi_kolom_otomatis(df.columns.tolist())
         kolom_hilang = [k for k, v in auto_map.items() if v is None]
 
         with st.expander("🔗 Pengaturan Pencocokan Kolom Excel (Otomatis Terhubung)", expanded=len(kolom_hilang) > 0):
             if kolom_hilang:
-                st.warning(f"⚠️ Ada nama kolom di Excel yang berbeda dari biasanya: **{', '.join(kolom_hilang)}**. Silakan pilih pasangannya di bawah ini:")
+                st.warning(f"⚠️ Ada nama kolom di Excel yang berbeda dari biasanya: **{', '.join(kolom_hilang)}**. Silakan pilih pasangannya:")
             else:
                 st.success("✅ Semua kolom Excel otomatis dikenali dan tersambung ke Blangko!")
 
@@ -357,45 +354,38 @@ else:
                 else:
                     hasil_iconprn += buat_blangko_dan_isi(baris, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, tinggi_halaman)
 
-            with st.expander("👁️ Lihat Preview Posisi Cetakan (Lembar Pertama)"):
-                contoh = buat_blangko_dan_isi(df_cetak.iloc[0], col_map_final, "", kota_cetak, tgl_cetak, jabatan, nama_manager, tinggi_halaman)
-                st.code(contoh.replace("\x1bE", "").replace("\x1bF", ""), language="text")
-
             nama_ptg_file = "_".join(ptg_terpilih)
             st.subheader("🖨️ Eksekusi Cetak ke Printer Dot Matrix")
-            st.markdown(
-                "💡 **Tips Sekali Klik Langsung Cetak:** Saat pertama kali mengunduh file `.iconprn` di Chrome/Edge, "
-                "klik panah kecil di samping file unduhan lalu centang **'Always open files of this type' (Selalu buka file jenis ini)**. "
-                "Selanjutnya setiap tombol di bawah diklik, `ClientPrintApps.exe` akan otomatis mencetak ke printer!"
-            )
 
             b1, b2 = st.columns(2)
             with b1:
                 st.download_button(
-                    label=f"🖨️ CETAK / DOWNLOAD PETUGAS {nama_ptg_file} ({len(df_cetak)} Lembar).iconprn",
+                    label=f"🖨️ CETAK PETUGAS {nama_ptg_file} ({len(df_cetak)} Lbr)",
                     data=hasil_iconprn.encode("latin1", errors="replace"),
                     file_name=f"ISI_BLANGKO_{nama_ptg_file}_{urut_awal}_{urut_akhir}.iconprn",
                     mime="application/octet-stream",
                     type="primary",
                     use_container_width=True
                 )
+            
             with b2:
                 if kol_petugas and kol_petugas in df.columns:
-                    if st.button("📦 Buat Paket ZIP Semua Petugas (37 File .iconprn Terpisah)", use_container_width=True):
-                        buf = io.BytesIO()
-                        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                            for kode_p, grp in df.groupby(kol_petugas):
-                                teks_p = ""
-                                for _, r in grp.iterrows():
-                                    if "Tahap 2" in mode_cetak:
-                                        teks_p += buat_isian_blangko(r, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, geser_kanan, geser_bawah, tinggi_halaman)
-                                    else:
-                                        teks_p += buat_blangko_dan_isi(r, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, tinggi_halaman)
-                                zf.writestr(f"PETUGAS_{kode_p}_{len(grp)}lembar.iconprn", teks_p.encode("latin1", errors="replace"))
-                        st.download_button(
-                            label="⬇️ Klik untuk Unduh SEMUA_PETUGAS.zip",
-                            data=buf.getvalue(),
-                            file_name="CETAK_SEMUA_PETUGAS.zip",
-                            mime="application/zip",
-                            use_container_width=True
-                        )
+                    buf = io.BytesIO()
+                    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                        # KODE ZIP DIPERBAIKI: HANYA MENGAMBIL DARI df_cetak (YANG TAMPIL DI LAYAR SAJA)
+                        for kode_p, grp in df_cetak.groupby(kol_petugas):
+                            teks_p = ""
+                            for _, r in grp.iterrows():
+                                if "Tahap 2" in mode_cetak:
+                                    teks_p += buat_isian_blangko(r, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, geser_kanan, geser_bawah, tinggi_halaman)
+                                else:
+                                    teks_p += buat_blangko_dan_isi(r, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, tinggi_halaman)
+                            zf.writestr(f"PETUGAS_{kode_p}_{len(grp)}lembar.iconprn", teks_p.encode("latin1", errors="replace"))
+                    
+                    st.download_button(
+                        label="📦 DOWNLOAD PAKET ZIP (Sesuai Tabel)",
+                        data=buf.getvalue(),
+                        file_name=f"PAKET_CETAK_{urut_awal}_sd_{urut_akhir}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
