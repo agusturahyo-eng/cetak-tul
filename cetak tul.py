@@ -2,16 +2,11 @@ import streamlit as st
 import pandas as pd
 import io
 import zipfile
-
-st.set_page_config(page_title="Cetak TUL VI-01 PLN ULP Tulung", layout="wide")
-import streamlit as st
-import pandas as pd
-import io
-import zipfile
+import re
 
 st.set_page_config(page_title="Cetak TUL VI-01 PLN ULP Tulung", layout="wide")
 
-st.title("⚡ Aplikasi Cetak TUL VI-01")
+st.title("⚡ Aplikasi Cetak TUL VI-01 (Super Presisi & Cepat)")
 st.caption("PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY - UP3 KLATEN - ULP TULUNG")
 
 # ================= 1. SIDEBAR PENGATURAN =================
@@ -51,42 +46,69 @@ tgl_cetak = st.sidebar.text_input("Tanggal Cetak", value="05-10-2026")
 jabatan = st.sidebar.text_input("Jabatan", value="MANAGER")
 nama_manager = st.sidebar.text_input("Nama Manager (Dicetak Tebal)", value="MARTONO AJI PRABOWO")
 
-# ================= 2. FUNGSI DETEKSI KOLOM PINTAR =================
-STANDAR_KOLOM = {
-    "IDPEL": ["idpel", "id pelanggan", "id_pelanggan", "no pelanggan"],
-    "Nomor TUL": ["nomor tul", "no tul", "no. tul", "nomor_tul"],
-    "Nama": ["nama", "nama pelanggan", "nama_pelanggan"],
-    "KDDK": ["kddk", "kode kedudukan", "kedudukan"],
-    "Gardu/Tiang": ["gardu/tiang", "gardu", "nama gardu/tiang", "gardutiang", "tiang"],
-    "Loket": ["loket", "kode loket"],
-    "Alamat": ["alamat", "alamat pelanggan"],
-    "Nomor Meter": ["nomor meter", "no meter", "nomor_meter", "nomormeter"],
-    "Tarif/Daya": ["tarif/daya", "tarip / daya", "tarifdaya", "tarif", "daya"],
-    "Kelompok": ["kelompok", "klp"],
-    "Bulan Rekening": ["bulan rekening", "bulan_rekening", "rekening", "blth"],
-    "Bulan Keterlambatan": ["bulan keterlambatan", "bulan_keterlambatan", "keterlambatan"],
-    "Jumlah Rekening": ["jumlah rekening", "jumlah_rekening", "jumlah_rekening_", "rp rekening", "tagihan"],
-    "Jumlah Denda": ["jumlah denda", "jumlah_denda", "jumlah_denda_", "denda", "bk", "biaya keterlambatan"],
-    "Jumlah Tunggakan": ["jumlah tunggakan", "jumlah_tunggakan", "jumlah_tunggakan_", "total", "total tunggakan"],
-    "petugas": ["petugas", "kode petugas", "nama petugas", "cater"]
-}
+# ================= 2. FUNGSI EKSTRAKSI DATA DARI .ICONPRN =================
+def baca_data_dari_iconprn(teks_mentah):
+    """Membaca isi file .iconprn dan mengubahnya menjadi format Tabel (List of Dictionaries)"""
+    hasil = []
+    # Pisahkan setiap halaman berdasarkan keyword ini
+    blok_halaman = re.split(r'PEMBERITAHUAN PELAKSANAAN PEMUTUSAN', teks_mentah)
+    
+    for blok in blok_halaman:
+        if "ID. Pelanggan" not in blok: continue
+        
+        data = {
+            'IDPEL': "", 'Nomor TUL': "", 'Nama': "", 'KDDK': "", 'Gardu/Tiang': "", 
+            'Loket': "", 'Alamat': "", 'Nomor Meter': "", 'Tarif/Daya': "", 'Kelompok': "", 
+            'Bulan Rekening': "", 'Bulan Keterlambatan': "", 'Jumlah Rekening': "0", 
+            'Jumlah Denda': "0", 'Jumlah Tunggakan': "0", 'petugas': "Pusat"
+        }
+        
+        m_tul = re.search(r'NO\. TUL\s*:\s*([A-Z0-9/\-]+)', blok)
+        if m_tul: data['Nomor TUL'] = m_tul.group(1).strip()
+            
+        m_nama = re.search(r'Nama\s*:\s*(.+)', blok)
+        if m_nama: data['Nama'] = m_nama.group(1).strip()
 
-def deteksi_kolom_otomatis(df_cols):
-    mapping = {}
-    cols_lower = {c.strip().lower(): c for c in df_cols}
-    for target, kandidat_list in STANDAR_KOLOM.items():
-        found = None
-        for k in kandidat_list:
-            if k in cols_lower:
-                found = cols_lower[k]
-                break
-        if not found:
-            for c_low, c_orig in cols_lower.items():
-                if any(k in c_low for k in kandidat_list):
-                    found = c_orig
-                    break
-        mapping[target] = found
-    return mapping
+        m_idpel = re.search(r'ID\. Pelanggan\s*:\s*[^0-9]*(\d+)', blok)
+        if m_idpel: data['IDPEL'] = m_idpel.group(1).strip()
+
+        m_kddk = re.search(r'Kode Kedudukan\s*:\s*([A-Z0-9]+)', blok)
+        if m_kddk: data['KDDK'] = m_kddk.group(1).strip()
+
+        m_alamat = re.search(r'Alamat\s*:\s*(.+)', blok)
+        if m_alamat: data['Alamat'] = m_alamat.group(1).strip()
+
+        m_meter = re.search(r'Nomor Meter\s*:\s*([A-Z0-9]+)', blok, re.IGNORECASE)
+        if m_meter: data['Nomor Meter'] = m_meter.group(1).strip()
+
+        m_gardu = re.search(r'Nama Gardu/Tiang\s*:\s*(.*?)(?=\s+Loket)', blok, re.IGNORECASE)
+        if m_gardu: data['Gardu/Tiang'] = m_gardu.group(1).strip()
+
+        m_loket = re.search(r'Loket\s*:\s*(.*?)(?=\n|\r)', blok, re.IGNORECASE)
+        if m_loket: data['Loket'] = m_loket.group(1).strip()
+
+        m_tarif = re.search(r'Tarip / Daya\s*:\s*(.*?)(?=\s+Kelompok)', blok, re.IGNORECASE)
+        if m_tarif: data['Tarif/Daya'] = m_tarif.group(1).strip()
+
+        m_klp = re.search(r'Kelompok\s*:\s*([A-Z0-9]+)', blok, re.IGNORECASE)
+        if m_klp: data['Kelompok'] = m_klp.group(1).strip()
+
+        m_rek = re.search(r'Rekening\s*:\s*(.+?)\s*Rp\.\s*:\s*([\d,\.]+)', blok)
+        if m_rek:
+            data['Bulan Rekening'] = m_rek.group(1).strip()
+            data['Jumlah Rekening'] = m_rek.group(2).replace(',', '').replace('.', '').strip()
+
+        m_denda = re.search(r'Jumlah Biaya Keterlambatan s\.d bulan\s*:\s*(.+?)\s*Rp\.\s*:\s*([\d,\.]+)', blok)
+        if m_denda:
+            data['Bulan Keterlambatan'] = m_denda.group(1).strip()
+            data['Jumlah Denda'] = m_denda.group(2).replace(',', '').replace('.', '').strip()
+
+        m_tung = re.search(r'Jumlah Tunggakan.*?Rp\.\s*:\s*([\d,\.]+)', blok)
+        if m_tung:
+            data['Jumlah Tunggakan'] = m_tung.group(1).replace(',', '').replace('.', '').strip()
+
+        hasil.append(data)
+    return hasil
 
 # ================= 3. FUNGSI GENERATOR FILE .ICONPRN =================
 def get_printer_init_code(printer_choice):
@@ -118,13 +140,18 @@ def shift_line(text, offset_x):
     return text
 
 def ambil_nilai(row, col_map, key, default=""):
+    # JIKA BACA DARI ICONPRN (Mappingnya adalah key itu sendiri)
+    if col_map is None:
+        return str(row.get(key, default)).strip()
+    
+    # JIKA BACA DARI EXCEL (Gunakan col_map)
     nama_kolom = col_map.get(key)
     if nama_kolom and nama_kolom in row and pd.notna(row[nama_kolom]):
         return str(row[nama_kolom]).strip()
     return default
 
 def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_cetak_kota, geser_tgl, offset_x=0, offset_y=0, page_lines=44):
-    """Mencetak HANYA ISIAN DATA persis di koordinat BLANKO.iconprn (Koordinat diperbarui)"""
+    """Mencetak HANYA ISIAN DATA persis di koordinat BLANKO.iconprn (Koordinat Super Presisi)"""
     ESC = "\x1b"
     BOLD_ON = f"{ESC}E"  
     BOLD_OFF = f"{ESC}F" 
@@ -312,96 +339,123 @@ if "Tahap 1 Saja" in mode_cetak:
         mime="application/octet-stream"
     )
 else:
-    uploaded_file = st.file_uploader("📂 Upload File Excel Data Tagihan (.xlsx / .xls)", type=["xlsx", "xls"])
+    # BISA PILIH FILE EXCEL (.xlsx) ATAU LANGSUNG FILE CETAK (.iconprn / .zip)
+    uploaded_file = st.file_uploader("📂 Upload File Data (.xlsx, .xls, .iconprn, atau .zip)", type=["xlsx", "xls", "iconprn", "prn", "zip"])
 
     if uploaded_file:
-        xls = pd.ExcelFile(uploaded_file)
-        pilih_sheet = st.selectbox("Pilih Sheet Excel:", xls.sheet_names) if len(xls.sheet_names) > 1 else xls.sheet_names[0]
-        df = pd.read_excel(uploaded_file, sheet_name=pilih_sheet)
+        nama_file = uploaded_file.name.lower()
+        df = None
+        col_map_final = None # Kalau none, berarti dari iconprn
 
-        auto_map = deteksi_kolom_otomatis(df.columns.tolist())
-        kolom_hilang = [k for k, v in auto_map.items() if v is None]
+        with st.spinner("Memproses file masukan..."):
+            # Jika file adalah EXCEL
+            if nama_file.endswith('.xlsx') or nama_file.endswith('.xls'):
+                xls = pd.ExcelFile(uploaded_file)
+                pilih_sheet = st.selectbox("Pilih Sheet Excel:", xls.sheet_names) if len(xls.sheet_names) > 1 else xls.sheet_names[0]
+                df = pd.read_excel(uploaded_file, sheet_name=pilih_sheet)
+                
+                auto_map = deteksi_kolom_otomatis(df.columns.tolist())
+                kolom_hilang = [k for k, v in auto_map.items() if v is None]
 
-        with st.expander("🔗 Pengaturan Pencocokan Kolom Excel (Otomatis Terhubung)", expanded=len(kolom_hilang) > 0):
-            if kolom_hilang:
-                st.warning(f"⚠️ Ada nama kolom di Excel yang berbeda dari biasanya: **{', '.join(kolom_hilang)}**. Silakan pilih pasangannya:")
+                with st.expander("🔗 Pengaturan Pencocokan Kolom Excel", expanded=len(kolom_hilang) > 0):
+                    if kolom_hilang:
+                        st.warning(f"⚠️ Ada nama kolom yang berbeda: **{', '.join(kolom_hilang)}**. Silakan pilih:")
+                    else:
+                        st.success("✅ Semua kolom Excel otomatis dikenali!")
+
+                    opsi_kolom = ["(Kosongkan)"] + df.columns.tolist()
+                    col_map_final = {}
+                    cols_ui = st.columns(4)
+                    for idx, (field_blangko, terdeteksi) in enumerate(auto_map.items()):
+                        with cols_ui[idx % 4]:
+                            idx_default = opsi_kolom.index(terdeteksi) if terdeteksi in opsi_kolom else 0
+                            col_map_final[field_blangko] = st.selectbox(f"Isian [{field_blangko}]:", opsi_kolom, index=idx_default)
+                            if col_map_final[field_blangko] == "(Kosongkan)": col_map_final[field_blangko] = None
+
+            # Jika file adalah ZIP (berisi banyak iconprn)
+            elif nama_file.endswith('.zip'):
+                with zipfile.ZipFile(uploaded_file, 'r') as z:
+                    semua_data_zip = []
+                    for z_name in z.namelist():
+                        if z_name.lower().endswith(('.iconprn', '.prn', '.txt')):
+                            teks_mentah = z.read(z_name).decode('latin1', errors='ignore')
+                            semua_data_zip.extend(baca_data_dari_iconprn(teks_mentah))
+                    df = pd.DataFrame(semua_data_zip)
+                st.success(f"✅ Berhasil membaca {len(df)} tagihan dari dalam file ZIP!")
+
+            # Jika file adalah ICONPRN tunggal
             else:
-                st.success("✅ Semua kolom Excel otomatis dikenali dan tersambung ke Blangko!")
+                teks_mentah = uploaded_file.getvalue().decode('latin1', errors='ignore')
+                df = pd.DataFrame(baca_data_dari_iconprn(teks_mentah))
+                st.success(f"✅ Berhasil membaca {len(df)} tagihan langsung dari file .iconprn!")
 
-            opsi_kolom = ["(Kosongkan)"] + df.columns.tolist()
-            col_map_final = {}
-            cols_ui = st.columns(4)
-            for idx, (field_blangko, terdeteksi) in enumerate(auto_map.items()):
-                with cols_ui[idx % 4]:
-                    idx_default = opsi_kolom.index(terdeteksi) if terdeteksi in opsi_kolom else 0
-                    pilihan = st.selectbox(f"Isian [{field_blangko}]:", opsi_kolom, index=idx_default)
-                    col_map_final[field_blangko] = None if pilihan == "(Kosongkan)" else pilihan
-
-        kol_petugas = col_map_final.get("petugas")
-        if kol_petugas and kol_petugas in df.columns:
-            df[kol_petugas] = df[kol_petugas].fillna("Tanpa_Petugas").astype(str)
-            daftar_ptg = sorted(df[kol_petugas].unique().tolist())
-
-            st.subheader("👷 Pilih Petugas & Urutan Cetak")
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                ptg_terpilih = st.multiselect("Pilih Kode Petugas:", daftar_ptg, default=[daftar_ptg[0]] if daftar_ptg else [])
-            df_saring = df[df[kol_petugas].isin(ptg_terpilih)].reset_index(drop=True)
-        else:
-            st.subheader("📋 Rentang Urutan Cetak")
-            c2, c3 = st.columns(2)
-            ptg_terpilih = ["Semua"]
-            df_saring = df.reset_index(drop=True)
-
-        total_data = len(df_saring)
-        with c2:
-            urut_awal = st.number_input("Mulai Urutan ke-:", min_value=1, max_value=max(1, total_data), value=1)
-        with c3:
-            urut_akhir = st.number_input("Sampai Urutan ke-:", min_value=1, max_value=max(1, total_data), value=max(1, total_data))
-
-        df_cetak = df_saring.iloc[urut_awal - 1 : urut_akhir]
-        st.info(f"Siap mencetak **{len(df_cetak)} lembar** (Petugas: **{', '.join(ptg_terpilih)}**, Urutan {urut_awal} s/d {urut_akhir}).")
-        st.dataframe(df_cetak, use_container_width=True, height=220)
-
-        if len(df_cetak) > 0:
-            hasil_iconprn = ""
-            for _, baris in df_cetak.iterrows():
-                if "Tahap 2" in mode_cetak:
-                    hasil_iconprn += buat_isian_blangko(baris, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, cetak_kota_jabatan, geser_tgl, geser_kanan, geser_bawah, tinggi_halaman)
-                else:
-                    hasil_iconprn += buat_blangko_dan_isi(baris, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, tinggi_halaman)
-
-            nama_ptg_file = "_".join(ptg_terpilih)
-            st.subheader("🖨️ Eksekusi Cetak ke Printer Dot Matrix")
-
-            b1, b2 = st.columns(2)
-            with b1:
-                st.download_button(
-                    label=f"🖨️ CETAK PETUGAS {nama_ptg_file} ({len(df_cetak)} Lbr)",
-                    data=hasil_iconprn.encode("latin1", errors="replace"),
-                    file_name=f"ISI_BLANGKO_{nama_ptg_file}_{urut_awal}_{urut_akhir}.iconprn",
-                    mime="application/octet-stream",
-                    type="primary",
-                    use_container_width=True
-                )
+        if df is not None and len(df) > 0:
+            kol_petugas = col_map_final.get("petugas") if col_map_final else "petugas"
             
-            with b2:
-                if kol_petugas and kol_petugas in df.columns:
-                    buf = io.BytesIO()
-                    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                        for kode_p, grp in df_cetak.groupby(kol_petugas):
-                            teks_p = ""
-                            for _, r in grp.iterrows():
-                                if "Tahap 2" in mode_cetak:
-                                    teks_p += buat_isian_blangko(r, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, cetak_kota_jabatan, geser_tgl, geser_kanan, geser_bawah, tinggi_halaman)
-                                else:
-                                    teks_p += buat_blangko_dan_isi(r, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, tinggi_halaman)
-                            zf.writestr(f"PETUGAS_{kode_p}_{len(grp)}lembar.iconprn", teks_p.encode("latin1", errors="replace"))
-                    
+            if kol_petugas and kol_petugas in df.columns:
+                df[kol_petugas] = df[kol_petugas].fillna("Tanpa_Petugas").astype(str)
+                daftar_ptg = sorted(df[kol_petugas].unique().tolist())
+
+                st.subheader("👷 Pilih Petugas & Urutan Cetak")
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    ptg_terpilih = st.multiselect("Pilih Kode Petugas:", daftar_ptg, default=[daftar_ptg[0]] if daftar_ptg else [])
+                df_saring = df[df[kol_petugas].isin(ptg_terpilih)].reset_index(drop=True)
+            else:
+                st.subheader("📋 Rentang Urutan Cetak")
+                c2, c3 = st.columns(2)
+                ptg_terpilih = ["Semua"]
+                df_saring = df.reset_index(drop=True)
+
+            total_data = len(df_saring)
+            with c2:
+                urut_awal = st.number_input("Mulai Urutan ke-:", min_value=1, max_value=max(1, total_data), value=1)
+            with c3:
+                urut_akhir = st.number_input("Sampai Urutan ke-:", min_value=1, max_value=max(1, total_data), value=max(1, total_data))
+
+            df_cetak = df_saring.iloc[urut_awal - 1 : urut_akhir]
+            st.info(f"Siap mencetak **{len(df_cetak)} lembar** (Petugas: **{', '.join(ptg_terpilih)}**, Urutan {urut_awal} s/d {urut_akhir}).")
+            st.dataframe(df_cetak, use_container_width=True, height=220)
+
+            if len(df_cetak) > 0:
+                hasil_iconprn = ""
+                for _, baris in df_cetak.iterrows():
+                    if "Tahap 2" in mode_cetak:
+                        hasil_iconprn += buat_isian_blangko(baris, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, cetak_kota_jabatan, geser_tgl, geser_kanan, geser_bawah, tinggi_halaman)
+                    else:
+                        hasil_iconprn += buat_blangko_dan_isi(baris, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, tinggi_halaman)
+
+                nama_ptg_file = "_".join(ptg_terpilih)
+                st.subheader("🖨️ Eksekusi Cetak ke Printer Dot Matrix")
+
+                b1, b2 = st.columns(2)
+                with b1:
                     st.download_button(
-                        label="📦 DOWNLOAD PAKET ZIP (Sesuai Tabel)",
-                        data=buf.getvalue(),
-                        file_name=f"PAKET_CETAK_{urut_awal}_sd_{urut_akhir}.zip",
-                        mime="application/zip",
+                        label=f"🖨️ CETAK PETUGAS {nama_ptg_file} ({len(df_cetak)} Lbr)",
+                        data=hasil_iconprn.encode("latin1", errors="replace"),
+                        file_name=f"ISI_BLANGKO_{nama_ptg_file}_{urut_awal}_{urut_akhir}.iconprn",
+                        mime="application/octet-stream",
+                        type="primary",
                         use_container_width=True
                     )
+                
+                with b2:
+                    if kol_petugas and kol_petugas in df.columns:
+                        buf = io.BytesIO()
+                        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                            for kode_p, grp in df_cetak.groupby(kol_petugas):
+                                teks_p = ""
+                                for _, r in grp.iterrows():
+                                    if "Tahap 2" in mode_cetak:
+                                        teks_p += buat_isian_blangko(r, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, cetak_kota_jabatan, geser_tgl, geser_kanan, geser_bawah, tinggi_halaman)
+                                    else:
+                                        teks_p += buat_blangko_dan_isi(r, col_map_final, init_esc, kota_cetak, tgl_cetak, jabatan, nama_manager, tinggi_halaman)
+                                zf.writestr(f"PETUGAS_{kode_p}_{len(grp)}lembar.iconprn", teks_p.encode("latin1", errors="replace"))
+                        
+                        st.download_button(
+                            label="📦 DOWNLOAD PAKET ZIP (Sesuai Tabel)",
+                            data=buf.getvalue(),
+                            file_name=f"PAKET_CETAK_{urut_awal}_sd_{urut_akhir}.zip",
+                            mime="application/zip",
+                            use_container_width=True
+                        )
