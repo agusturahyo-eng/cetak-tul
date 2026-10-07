@@ -81,7 +81,7 @@ def tentukan_petugas(idpel, tarif_daya, kddk):
     return "BARU"
 
 def baca_data_dari_iconprn(teks_mentah):
-    """Membaca isi file .iconprn dan mengubahnya menjadi format Tabel (List of Dictionaries)"""
+    """Membaca isi file .iconprn dan mengubahnya menjadi format Tabel"""
     hasil = []
     blok_halaman = re.split(r'PEMBERITAHUAN PELAKSANAAN PEMUTUSAN', teks_mentah)
     
@@ -95,54 +95,53 @@ def baca_data_dari_iconprn(teks_mentah):
             'Jumlah Denda': "0", 'Jumlah Tunggakan': "0", 'petugas': "BARU"
         }
         
-        m_tul = re.search(r'NO\. TUL\s*:\s*([A-Z0-9/\-]+)', blok)
+        m_tul = re.search(r'NO\. TUL[ \t]*:[ \t]*([^\n\r]+)', blok, re.IGNORECASE)
         if m_tul: data['Nomor TUL'] = m_tul.group(1).strip()
             
-        m_nama = re.search(r'Nama\s*:\s*(.+)', blok)
+        m_nama = re.search(r'Nama[ \t]*:[ \t]*([^\n\r]+)', blok, re.IGNORECASE)
         if m_nama: data['Nama'] = m_nama.group(1).strip()
 
-        m_idpel = re.search(r'ID\. Pelanggan\s*:\s*[^0-9]*(\d+)', blok)
+        m_idpel = re.search(r'ID\. Pelanggan[ \t]*:[ \t]*[^0-9\n\r]*(\d+)', blok, re.IGNORECASE)
         if m_idpel: data['IDPEL'] = m_idpel.group(1).strip()
 
-        m_kddk = re.search(r'Kode Kedudukan\s*:\s*([A-Z0-9]+)', blok)
+        m_kddk = re.search(r'Kode Kedudukan[ \t]*:[ \t]*([^\n\r]+)', blok, re.IGNORECASE)
         if m_kddk: data['KDDK'] = m_kddk.group(1).strip()
 
-        m_alamat = re.search(r'Alamat\s*:\s*(.+)', blok)
+        m_alamat = re.search(r'Alamat[ \t]*:[ \t]*([^\n\r]+)', blok, re.IGNORECASE)
         if m_alamat: data['Alamat'] = m_alamat.group(1).strip()
 
-        m_meter = re.search(r'Nomor Meter\s*:\s*([A-Z0-9]+)', blok, re.IGNORECASE)
+        m_meter = re.search(r'Nomor Meter[ \t]*:[ \t]*([^\n\r]+)', blok, re.IGNORECASE)
         if m_meter: data['Nomor Meter'] = m_meter.group(1).strip()
 
-        m_gardu = re.search(r'Nama Gardu/Tiang\s*:\s*(.*?)(?=\s+Loket)', blok, re.IGNORECASE)
+        m_gardu = re.search(r'Nama Gardu/Tiang[ \t]*:[ \t]*([^\n\r]*?)(?=[ \t]*Loket|[ \t]*$)', blok, re.IGNORECASE)
         if m_gardu: data['Gardu/Tiang'] = m_gardu.group(1).strip()
 
-        m_loket = re.search(r'Loket\s*:\s*(.*?)(?=\n|\r)', blok, re.IGNORECASE)
+        m_loket = re.search(r'Loket[ \t]*:[ \t]*([^\n\r]*)', blok, re.IGNORECASE)
         if m_loket: data['Loket'] = m_loket.group(1).strip()
 
-        m_tarif = re.search(r'Tarip / Daya\s*:\s*(.*?)(?=\s+Kelompok)', blok, re.IGNORECASE)
+        m_tarif = re.search(r'Tarip / Daya[ \t]*:[ \t]*([^\n\r]*?)(?=[ \t]*Kelompok|[ \t]*$)', blok, re.IGNORECASE)
         if m_tarif: data['Tarif/Daya'] = m_tarif.group(1).strip()
 
-        m_klp = re.search(r'Kelompok\s*:\s*([A-Z0-9]+)', blok, re.IGNORECASE)
+        m_klp = re.search(r'Kelompok[ \t]*:[ \t]*([^\n\r]*)', blok, re.IGNORECASE)
         if m_klp: data['Kelompok'] = m_klp.group(1).strip()
 
-        m_rek = re.search(r'Rekening\s*:\s*(.+?)\s*Rp\.\s*:\s*([\d,\.]+)', blok)
+        m_rek = re.search(r'Rekening[ \t]*:[ \t]*([^\n\r]*?)[ \t]*Rp\.[ \t]*:[ \t]*([\d,\.]+)', blok, re.IGNORECASE)
         if m_rek:
             data['Bulan Rekening'] = m_rek.group(1).strip()
             data['Jumlah Rekening'] = m_rek.group(2).replace(',', '').replace('.', '').strip()
 
-        m_denda = re.search(r'Jumlah Biaya Keterlambatan s\.d bulan\s*:\s*(.+?)\s*Rp\.\s*:\s*([\d,\.]+)', blok)
+        m_denda = re.search(r'Jumlah Biaya Keterlambatan s\.d bulan[ \t]*:[ \t]*([^\n\r]*?)[ \t]*Rp\.[ \t]*:[ \t]*([\d,\.]+)', blok, re.IGNORECASE)
         if m_denda:
             data['Bulan Keterlambatan'] = m_denda.group(1).strip()
             data['Jumlah Denda'] = m_denda.group(2).replace(',', '').replace('.', '').strip()
 
-        m_tung = re.search(r'Jumlah Tunggakan.*?Rp\.\s*:\s*([\d,\.]+)', blok)
+        m_tung = re.search(r'Jumlah Tunggakan.*?[ \t]*Rp\.[ \t]*:[ \t]*([\d,\.]+)', blok, re.IGNORECASE)
         if m_tung:
             data['Jumlah Tunggakan'] = m_tung.group(1).replace(',', '').replace('.', '').strip()
 
-        # Pemanggilan fungsi penentuan petugas
         data['petugas'] = tentukan_petugas(data['IDPEL'], data['Tarif/Daya'], data['KDDK'])
-
         hasil.append(data)
+        
     return hasil
 
 # ================= 2A. FUNGSI DETEKSI KOLOM EXCEL PINTAR =================
@@ -212,18 +211,15 @@ def shift_line(text, offset_x):
     return text
 
 def ambil_nilai(row, col_map, key, default=""):
-    # JIKA BACA DARI ICONPRN (Mappingnya adalah key itu sendiri)
     if col_map is None:
         return str(row.get(key, default)).strip()
-    
-    # JIKA BACA DARI EXCEL (Gunakan col_map)
     nama_kolom = col_map.get(key)
     if nama_kolom and nama_kolom in row and pd.notna(row[nama_kolom]):
         return str(row[nama_kolom]).strip()
     return default
 
 def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_cetak_kota, geser_tgl, offset_x=0, offset_y=0, page_lines=44):
-    """Mencetak HANYA ISIAN DATA persis di koordinat BLANKO.iconprn (Koordinat Super Presisi)"""
+    """Mencetak HANYA ISIAN DATA persis di koordinat BLANKO.iconprn"""
     ESC = "\x1b"
     BOLD_ON = f"{ESC}E"  
     BOLD_OFF = f"{ESC}F" 
@@ -254,15 +250,11 @@ def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_ceta
 
     set_line(1,  f"{'':<73}{no_tul}")
     set_line(7,  f"{'':<21}{nama}")
-    
-    # KDDK Ditarik 1 spasi ke kiri agar pas
     set_line(8,  f"{'':<21}{idpel:<58}{kddk}")         
     set_line(9,  f"{'':<21}{alamat}")
     set_line(10, f"{'':<21}{no_meter}")
     set_line(11, f"{'':<21}{gardu:<53}{loket}")        
     set_line(12, f"{'':<21}{tarif:<53}{kelompok}")     
-    
-    # Bulan Rekening DITARIK KE KIRI dekat titik dua (Mulai di spasi 12)
     set_line(14, f"{'':<12}{bln_rek:<66}{rp_rek}")
     set_line(15, f"{'':<39}{bln_lambat:<39}{rp_denda}")
     set_line(17, f"{'':<78}{rp_total}")
@@ -273,7 +265,6 @@ def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_ceta
     posisi_tgl = max(0, 64 + geser_tgl)
     set_line(30, f"{'':<{posisi_tgl}}{str_kota}{tgl}")
     set_line(31, f"{'':<69}{str_jabatan}")
-    
     set_line(36, f"{'':<64}{BOLD_ON}{manager}{BOLD_OFF}")
 
     raw_lines[0] = init_code + raw_lines[0]
@@ -397,7 +388,6 @@ def buat_blangko_kosong(init_code, jml_lembar=50, page_lines=44):
         lines.append("")
     return ("\r\n".join(lines[:page_lines]) + "\r\n") * jml_lembar
 
-
 # ================= 4. HALAMAN UTAMA APLIKASI =================
 init_esc = get_printer_init_code(tipe_printer)
 
@@ -412,16 +402,14 @@ if "Tahap 1 Saja" in mode_cetak:
         mime="application/octet-stream"
     )
 else:
-    # BISA PILIH FILE EXCEL (.xlsx) ATAU LANGSUNG FILE CETAK (.iconprn / .zip)
     uploaded_file = st.file_uploader("📂 Upload File Data (.xlsx, .xls, .iconprn, atau .zip)", type=["xlsx", "xls", "iconprn", "prn", "zip"])
 
     if uploaded_file:
         nama_file = uploaded_file.name.lower()
         df = None
-        col_map_final = None # Kalau none, berarti dari iconprn
+        col_map_final = None 
 
         with st.spinner("Memproses file masukan..."):
-            # Jika file adalah EXCEL
             if nama_file.endswith('.xlsx') or nama_file.endswith('.xls'):
                 xls = pd.ExcelFile(uploaded_file)
                 pilih_sheet = st.selectbox("Pilih Sheet Excel:", xls.sheet_names) if len(xls.sheet_names) > 1 else xls.sheet_names[0]
@@ -445,7 +433,6 @@ else:
                             col_map_final[field_blangko] = st.selectbox(f"Isian [{field_blangko}]:", opsi_kolom, index=idx_default)
                             if col_map_final[field_blangko] == "(Kosongkan)": col_map_final[field_blangko] = None
 
-            # Jika file adalah ZIP (berisi banyak iconprn)
             elif nama_file.endswith('.zip'):
                 with zipfile.ZipFile(uploaded_file, 'r') as z:
                     semua_data_zip = []
@@ -456,7 +443,6 @@ else:
                     df = pd.DataFrame(semua_data_zip)
                 st.success(f"✅ Berhasil membaca {len(df)} tagihan dari dalam file ZIP!")
 
-            # Jika file adalah ICONPRN tunggal
             else:
                 teks_mentah = uploaded_file.getvalue().decode('latin1', errors='ignore')
                 df = pd.DataFrame(baca_data_dari_iconprn(teks_mentah))
