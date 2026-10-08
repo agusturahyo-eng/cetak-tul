@@ -6,7 +6,7 @@ import re
 
 st.set_page_config(page_title="Cetak TUL VI-01 PLN ULP Tulung", layout="wide")
 
-st.title("⚡ Aplikasi Cetak TUL VI-01 (Super Presisi & Cepat)")
+st.title("⚡ Aplikasi Cetak TUL VI-01 (Presisi & Rata Kanan)")
 st.caption("PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY - UP3 KLATEN - ULP TULUNG")
 
 # ================= 1. SIDEBAR PENGATURAN =================
@@ -38,8 +38,8 @@ geser_bawah = st.sidebar.number_input("Geser Turun/Naik Semua Teks (Baris):", mi
 tinggi_halaman = st.sidebar.number_input("Jumlah Baris per Lembar:", min_value=30, max_value=66, value=44)
 
 st.sidebar.header("✍️ 3. Pengaturan Tanda Tangan")
-cetak_kota_jabatan = st.sidebar.checkbox("Cetak tulisan Kota (TULUNG,) & Jabatan (MANAGER)", value=False, help="Hapus centang jika kertas blangko sudah ada tulisan TULUNG & MANAGER-nya")
-geser_tgl = st.sidebar.number_input("Geser Kiri/Kanan KHUSUS Tanggal (Spasi):", min_value=-30, max_value=30, value=8, help="Otomatis digeser 8 spasi agar pas di sebelah kata TULUNG,")
+cetak_kota_jabatan = st.sidebar.checkbox("Cetak tulisan Kota (TULUNG,) & Jabatan (MANAGER)", value=False)
+geser_tgl = st.sidebar.number_input("Geser Kiri/Kanan KHUSUS Tanggal (Spasi):", min_value=-30, max_value=30, value=8)
 
 kota_cetak = st.sidebar.text_input("Kota", value="TULUNG")
 tgl_cetak = st.sidebar.text_input("Tanggal Cetak", value="05-10-2026")
@@ -47,22 +47,18 @@ jabatan = st.sidebar.text_input("Jabatan", value="MANAGER")
 nama_manager = st.sidebar.text_input("Nama Manager (Dicetak Tebal)", value="MARTONO AJI PRABOWO")
 
 
-# ================= 2. FUNGSI EKSTRAKSI DATA DARI .ICONPRN =================
+# ================= 2. FUNGSI EKSTRAKSI DATA DARI .ICONPRN (DARI TAB 5) =================
 def tentukan_petugas(idpel, tarif_daya, kddk):
-    """Mendeteksi kode petugas berdasarkan KDDK atau IDPEL khusus"""
     daya = 0
     match_daya = re.search(r'/(\d+)', str(tarif_daya))
-    if match_daya: 
-        daya = int(match_daya.group(1))
-    if daya > 33000: 
-        return "PLN"
+    if match_daya: daya = int(match_daya.group(1))
+    if daya > 33000: return "PLN"
     
     idpel_khusus = {
         "524051069054": "c28", "524051263717": "c36", "524051265123": "c36", 
         "524051104194": "c04", "524051000615": "c08", "524050867033": "c08"
     }
-    if str(idpel) in idpel_khusus: 
-        return idpel_khusus[str(idpel)]
+    if str(idpel) in idpel_khusus: return idpel_khusus[str(idpel)]
         
     if len(str(kddk)) >= 6:
         kode_mid = str(kddk)[3:6].upper()
@@ -81,145 +77,107 @@ def tentukan_petugas(idpel, tarif_daya, kddk):
     return "BARU"
 
 def baca_data_dari_iconprn(teks_mentah):
-    """Membaca isi file .iconprn dan mengubahnya menjadi format Tabel (Kebal M dan g)"""
     hasil = []
     blok_halaman = re.split(r'PEMBERITAHUAN PELAKSANAAN PEMUTUSAN', teks_mentah)
-    
     for blok in blok_halaman:
         if "ID. Pelanggan" not in blok: continue
         
         data = {
             'IDPEL': "", 'Nomor TUL': "", 'Nama': "", 'KDDK': "", 'Gardu/Tiang': "", 
             'Loket': "", 'Alamat': "", 'Nomor Meter': "", 'Tarif/Daya': "", 'Kelompok': "", 
-            'Bulan Rekening': "", 'Bulan Keterlambatan': "", 'Jumlah Rekening': "0", 
-            'Jumlah Denda': "0", 'Jumlah Tunggakan': "0", 'petugas': "BARU"
+            'Bulan Rekening': "", 'Bulan Keterlambatan': "", 'Jumlah Rekening': 0, 
+            'Jumlah Denda': 0, 'Jumlah Tunggakan': 0, 'petugas': ""
         }
         
-        m_tul = re.search(r'NO\. TUL[ \t]*:[ \t]*([^\n\r]+)', blok, re.IGNORECASE)
-        if m_tul: data['Nomor TUL'] = m_tul.group(1).strip()
-            
-        m_nama = re.search(r'Nama[ \t]*:[ \t]*([^\n\r]+)', blok, re.IGNORECASE)
-        if m_nama: data['Nama'] = m_nama.group(1).strip()
+        idpel = re.search(r'ID\. Pelanggan\s*:\s*[^0-9]*(\d{11,13})', blok)
+        if idpel: data['IDPEL'] = str(idpel.group(1).strip())
 
-        m_idpel = re.search(r'ID\. Pelanggan[ \t]*:[ \t]*[^0-9\n\r]*(\d+)', blok, re.IGNORECASE)
-        if m_idpel: data['IDPEL'] = m_idpel.group(1).strip()
+        tul = re.search(r'NO\. TUL\s*:\s*([A-Z0-9/\-]+)', blok)
+        if tul: data['Nomor TUL'] = tul.group(1).strip()
 
-        m_kddk = re.search(r'Kode Kedudukan[ \t]*:[ \t]*([^\n\r]+)', blok, re.IGNORECASE)
-        if m_kddk: data['KDDK'] = m_kddk.group(1).strip()
+        nama = re.search(r'Nama\s*:\s*(.+)', blok)
+        if nama: data['Nama'] = nama.group(1).strip()
 
-        m_alamat = re.search(r'Alamat[ \t]*:[ \t]*([^\n\r]+)', blok, re.IGNORECASE)
-        if m_alamat: data['Alamat'] = m_alamat.group(1).strip()
+        kddk = re.search(r'Kode Kedudukan\s*:\s*([A-Z0-9]+)', blok)
+        if kddk: data['KDDK'] = kddk.group(1).strip()
 
-        m_meter = re.search(r'Nomor Meter[ \t]*:[ \t]*([^\n\r]+)', blok, re.IGNORECASE)
-        if m_meter: data['Nomor Meter'] = m_meter.group(1).strip()
+        gardu = re.search(r'Gardu\s*/?\s*Tiang\s*:\s*(.*?)(?=\s{2,}|\s+Loket\s*:|\n|\r|$)', blok, re.IGNORECASE)
+        if gardu: data['Gardu/Tiang'] = gardu.group(1).strip()
 
-        m_gardu = re.search(r'Nama Gardu/Tiang[ \t]*:[ \t]*([^\n\r]*?)(?=[ \t]*Loket|[ \t]*$)', blok, re.IGNORECASE)
-        if m_gardu: data['Gardu/Tiang'] = m_gardu.group(1).strip()
+        loket = re.search(r'Loket\s*:\s*(.*?)(?=\s{2,}|\s+Tarip|\s+Tarif|\s+Alamat|\s+Kelompok|\n|\r|$)', blok, re.IGNORECASE)
+        if loket: 
+            val_loket = loket.group(1).strip()
+            if "Tarip" in val_loket or "Kelompok" in val_loket or "Daya" in val_loket: val_loket = ""
+            data['Loket'] = val_loket
 
-        m_loket = re.search(r'Loket[ \t]*:[ \t]*([^\n\r]*)', blok, re.IGNORECASE)
-        if m_loket: data['Loket'] = m_loket.group(1).strip()
+        alamat = re.search(r'Alamat\s*:\s*(.+)', blok)
+        if alamat: data['Alamat'] = alamat.group(1).strip()
 
-        m_tarif = re.search(r'Tarip / Daya[ \t]*:[ \t]*([^\n\r]*?)(?=[ \t]*Kelompok|[ \t]*$)', blok, re.IGNORECASE)
-        if m_tarif: data['Tarif/Daya'] = m_tarif.group(1).strip()
+        meter = re.search(r'Nomor Meter\s*:\s*([A-Z0-9]+)', blok, re.IGNORECASE)
+        if meter: data['Nomor Meter'] = str(meter.group(1).strip())
 
-        m_klp = re.search(r'Kelompok[ \t]*:[ \t]*([^\n\r]*)', blok, re.IGNORECASE)
-        if m_klp: data['Kelompok'] = m_klp.group(1).strip()
+        tarif_match = re.search(r'Tarip / Daya\s*:\s*(.+?)\s+Kelompok\s*:\s*([^\n]+)', blok)
+        if tarif_match:
+            data['Tarif/Daya'] = tarif_match.group(1).strip()
+            data['Kelompok'] = tarif_match.group(2).strip()
+        else:
+            tarif = re.search(r'Tarip / Daya\s*:\s*([A-Z0-9/ ]+)', blok)
+            if tarif: data['Tarif/Daya'] = tarif.group(1).strip()
+            data['Kelompok'] = "1"
 
-        m_rek = re.search(r'Rekening\s*:\s*(.+?)\s*Rp\.\s*:\s*[^0-9\n\r]*([\d,\.]+)', blok, re.IGNORECASE)
-        if m_rek:
-            data['Bulan Rekening'] = m_rek.group(1).strip()
-            data['Jumlah Rekening'] = m_rek.group(2).replace(',', '').replace('.', '').strip()
+        rek = re.search(r'Rekening\s*:\s*(.+?)\s*Rp\.\s*:\s*[^0-9]*([\d,]+)', blok)
+        if rek:
+            data['Bulan Rekening'] = rek.group(1).strip()
+            val_rek = rek.group(2).replace(',', '').replace('.', '').strip()
+            data['Jumlah Rekening'] = int(val_rek) if val_rek.isdigit() else 0
 
-        m_denda = re.search(r'Jumlah Biaya Keterlambatan s\.d bulan\s*:\s*(.+?)\s*Rp\.\s*:\s*[^0-9\n\r]*([\d,\.]+)', blok, re.IGNORECASE)
-        if m_denda:
-            data['Bulan Keterlambatan'] = m_denda.group(1).strip()
-            data['Jumlah Denda'] = m_denda.group(2).replace(',', '').replace('.', '').strip()
+        denda = re.search(r'Jumlah Biaya Keterlambatan s\.d bulan\s*:\s*(.+?)\s*Rp\.\s*:\s*[^0-9]*([\d,]+)', blok)
+        if denda:
+            data['Bulan Keterlambatan'] = denda.group(1).strip()
+            val_denda = denda.group(2).replace(',', '').replace('.', '').strip()
+            data['Jumlah Denda'] = int(val_denda) if val_denda.isdigit() else 0
 
-        m_tung = re.search(r'Jumlah Tunggakan.*?[ \t]*Rp\.\s*:\s*[^0-9\n\r]*([\d,\.]+)', blok, re.IGNORECASE)
-        if m_tung:
-            data['Jumlah Tunggakan'] = m_tung.group(1).replace(',', '').replace('.', '').strip()
+        tunggakan = re.search(r'Jumlah Tunggakan.*?Rp\.\s*:\s*[^0-9]*([\d,]+)', blok)
+        if tunggakan:
+            val_tung = tunggakan.group(1).replace(',', '').replace('.', '').strip()
+            data['Jumlah Tunggakan'] = int(val_tung) if val_tung.isdigit() else 0
 
         data['petugas'] = tentukan_petugas(data['IDPEL'], data['Tarif/Daya'], data['KDDK'])
         hasil.append(data)
-        
     return hasil
-
-# ================= 2A. FUNGSI DETEKSI KOLOM EXCEL PINTAR =================
-STANDAR_KOLOM = {
-    "IDPEL": ["idpel", "id pelanggan", "id_pelanggan", "no pelanggan"],
-    "Nomor TUL": ["nomor tul", "no tul", "no. tul", "nomor_tul"],
-    "Nama": ["nama", "nama pelanggan", "nama_pelanggan"],
-    "KDDK": ["kddk", "kode kedudukan", "kedudukan"],
-    "Gardu/Tiang": ["gardu/tiang", "gardu", "nama gardu/tiang", "gardutiang", "tiang"],
-    "Loket": ["loket", "kode loket"],
-    "Alamat": ["alamat", "alamat pelanggan"],
-    "Nomor Meter": ["nomor meter", "no meter", "nomor_meter", "nomormeter"],
-    "Tarif/Daya": ["tarif/daya", "tarip / daya", "tarifdaya", "tarif", "daya"],
-    "Kelompok": ["kelompok", "klp"],
-    "Bulan Rekening": ["bulan rekening", "bulan_rekening", "rekening", "blth"],
-    "Bulan Keterlambatan": ["bulan keterlambatan", "bulan_keterlambatan", "keterlambatan"],
-    "Jumlah Rekening": ["jumlah rekening", "jumlah_rekening", "jumlah_rekening_", "rp rekening", "tagihan"],
-    "Jumlah Denda": ["jumlah denda", "jumlah_denda", "jumlah_denda_", "denda", "bk", "biaya keterlambatan"],
-    "Jumlah Tunggakan": ["jumlah tunggakan", "jumlah_tunggakan", "jumlah_tunggakan_", "total", "total tunggakan"],
-    "petugas": ["petugas", "kode petugas", "nama petugas", "cater"]
-}
-
-def deteksi_kolom_otomatis(df_cols):
-    mapping = {}
-    cols_lower = {c.strip().lower(): c for c in df_cols}
-    for target, kandidat_list in STANDAR_KOLOM.items():
-        found = None
-        for k in kandidat_list:
-            if k in cols_lower:
-                found = cols_lower[k]
-                break
-        if not found:
-            for c_low, c_orig in cols_lower.items():
-                if any(k in c_low for k in kandidat_list):
-                    found = c_orig
-                    break
-        mapping[target] = found
-    return mapping
 
 # ================= 3. FUNGSI GENERATOR FILE .ICONPRN =================
 def get_printer_init_code(printer_choice):
     ESC = "\x1b"
-    if "LQ-2190" in printer_choice:
-        return f"{ESC}g{ESC}0"
-    elif "17 CPI" in printer_choice:
-        return f"{ESC}P\x0f{ESC}0"
-    else:
-        return f"{ESC}M\x12{ESC}0"
+    if "LQ-2190" in printer_choice: return f"{ESC}g{ESC}0"
+    elif "17 CPI" in printer_choice: return f"{ESC}P\x0f{ESC}0"
+    else: return f"{ESC}M\x12{ESC}0"
 
 def format_rupiah(val):
     try:
-        if pd.isna(val) or str(val).strip() == "":
-            return "0"
+        if pd.isna(val) or str(val).strip() == "": return "0"
         bersih = str(val).replace(".", "").replace(",", "").strip()
         return f"{int(float(bersih)):,}".replace(",", ".")
     except Exception:
         return str(val)
 
 def shift_line(text, offset_x):
-    if not text:
-        return ""
-    if offset_x > 0:
-        return (" " * offset_x) + text
+    if not text: return ""
+    if offset_x > 0: return (" " * offset_x) + text
     elif offset_x < 0:
         leading = len(text) - len(text.lstrip(" "))
         return text[min(abs(offset_x), leading):]
     return text
 
 def ambil_nilai(row, col_map, key, default=""):
-    if col_map is None:
-        return str(row.get(key, default)).strip()
+    if col_map is None: return str(row.get(key, default)).strip()
     nama_kolom = col_map.get(key)
     if nama_kolom and nama_kolom in row and pd.notna(row[nama_kolom]):
         return str(row[nama_kolom]).strip()
     return default
 
 def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_cetak_kota, geser_tgl, offset_x=0, offset_y=0, page_lines=44):
-    """Mencetak HANYA ISIAN DATA persis di koordinat BLANKO.iconprn (Koordinat Super Presisi)"""
+    """Mencetak ISIAN DATA persis di koordinat BLANKO.iconprn dengan RUPIAH RATA KANAN"""
     ESC = "\x1b"
     BOLD_ON = f"{ESC}E"  
     BOLD_OFF = f"{ESC}F" 
@@ -237,9 +195,10 @@ def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_ceta
     bln_rek = ambil_nilai(row, col_map, "Bulan Rekening")
     bln_lambat = ambil_nilai(row, col_map, "Bulan Keterlambatan")
 
-    rp_rek = format_rupiah(ambil_nilai(row, col_map, "Jumlah Rekening", "0")).rjust(12)
-    rp_denda = format_rupiah(ambil_nilai(row, col_map, "Jumlah Denda", "0")).rjust(12)
-    rp_total = format_rupiah(ambil_nilai(row, col_map, "Jumlah Tunggakan", "0")).rjust(12)
+    # FORMAT RUPIAH DIBUAT RATA KANAN (Mepet Kanan dengan panjang 15 Karakter)
+    rp_rek = format_rupiah(ambil_nilai(row, col_map, "Jumlah Rekening", "0")).rjust(15)
+    rp_denda = format_rupiah(ambil_nilai(row, col_map, "Jumlah Denda", "0")).rjust(15)
+    rp_total = format_rupiah(ambil_nilai(row, col_map, "Jumlah Tunggakan", "0")).rjust(15)
 
     raw_lines = [""] * page_lines
 
@@ -250,16 +209,16 @@ def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_ceta
 
     set_line(1,  f"{'':<73}{no_tul}")
     set_line(7,  f"{'':<21}{nama}")
-    
     set_line(8,  f"{'':<21}{idpel:<58}{kddk}")         
     set_line(9,  f"{'':<21}{alamat}")
     set_line(10, f"{'':<21}{no_meter}")
     set_line(11, f"{'':<21}{gardu:<53}{loket}")        
     set_line(12, f"{'':<21}{tarif:<53}{kelompok}")     
     
-    set_line(14, f"{'':<12}{bln_rek:<66}{rp_rek}")
-    set_line(15, f"{'':<39}{bln_lambat:<39}{rp_denda}")
-    set_line(17, f"{'':<78}{rp_total}")
+    # Bulan Rekening Mepet Kiri, Rupiah Jatuh di Spasi ke-74 dan Rata Kanan
+    set_line(14, f"{'':<12}{bln_rek:<62}{rp_rek}")
+    set_line(15, f"{'':<39}{bln_lambat:<35}{rp_denda}")
+    set_line(17, f"{'':<74}{rp_total}")
     
     str_kota = f"{kota}, " if is_cetak_kota else ""
     str_jabatan = jab if is_cetak_kota else ""
@@ -273,7 +232,7 @@ def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_ceta
     return "\r\n".join(raw_lines) + "\r\n"
 
 def buat_blangko_dan_isi(row, col_map, init_code, kota, tgl, jab, manager, page_lines=44):
-    """Mencetak Blangko + Isian sekaligus dalam 1x jalan"""
+    """Mencetak Blangko + Isian sekaligus dalam 1x jalan (Rupiah Rata Kanan)"""
     ESC = "\x1b"
     BOLD_ON = f"{ESC}E"
     BOLD_OFF = f"{ESC}F"
@@ -291,9 +250,10 @@ def buat_blangko_dan_isi(row, col_map, init_code, kota, tgl, jab, manager, page_
     bln_rek = ambil_nilai(row, col_map, "Bulan Rekening")
     bln_lambat = ambil_nilai(row, col_map, "Bulan Keterlambatan")
 
-    rp_rek = format_rupiah(ambil_nilai(row, col_map, "Jumlah Rekening", "0")).rjust(12)
-    rp_denda = format_rupiah(ambil_nilai(row, col_map, "Jumlah Denda", "0")).rjust(12)
-    rp_total = format_rupiah(ambil_nilai(row, col_map, "Jumlah Tunggakan", "0")).rjust(12)
+    # RUPIAH RATA KANAN (15 Karakter)
+    rp_rek = format_rupiah(ambil_nilai(row, col_map, "Jumlah Rekening", "0")).rjust(15)
+    rp_denda = format_rupiah(ambil_nilai(row, col_map, "Jumlah Denda", "0")).rjust(15)
+    rp_total = format_rupiah(ambil_nilai(row, col_map, "Jumlah Tunggakan", "0")).rjust(15)
 
     lines = [
         f"{init_code}PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY",
@@ -310,10 +270,10 @@ def buat_blangko_dan_isi(row, col_map, init_code, kota, tgl, jab, manager, page_
         f"Nama Gardu/Tiang  :  {gardu:<44}Loket    : {loket}",
         f"Tarip / Daya      :  {tarif:<42}Kelompok : {kelompok}",
         "",
-        f"Rekening :  {bln_rek:<55}Rp. :  {rp_rek}",
-        f"Jumlah Biaya Keterlambatan s.d bulan : {bln_lambat:<28}Rp. :  {rp_denda}",
+        f"Rekening :  {bln_rek:<55}Rp. : {rp_rek}",
+        f"Jumlah Biaya Keterlambatan s.d bulan : {bln_lambat:<28}Rp. : {rp_denda}",
         "                                                                       ---------------",
-        f"Jumlah Tunggakan (belum termasuk biaya Administrasi)               Rp. :  {rp_total}",
+        f"Jumlah Tunggakan (belum termasuk biaya Administrasi)               Rp. : {rp_total}",
         "",
         "   Dengan ini diberitahukan dengan hormat bahwa pada hari ini aliran listrik di rumah/alamat seperti tersebut diatas   ",
         "terpaksa diputus untuk sementara karena rekening listrik belum dilunasi pada waktu yang telah ditetapkan.",
@@ -342,12 +302,18 @@ def buat_blangko_dan_isi(row, col_map, init_code, kota, tgl, jab, manager, page_
         lines.append("")
     return "\r\n".join(lines[:page_lines]) + "\r\n"
 
-def buat_blangko_kosong(init_code, jml_lembar=50, page_lines=44):
-    lines = [
-        f"{init_code}PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY",
+# ================= 4. HALAMAN UTAMA APLIKASI =================
+init_esc = get_printer_init_code(tipe_printer)
+
+if "Tahap 1 Saja" in mode_cetak:
+    st.subheader("📄 Cetak Blangko Kosong (.iconprn)")
+    jml = st.number_input("Jumlah Lembar Blangko:", min_value=1, max_value=1000, value=50)
+    
+    # Fungsi ringkas untuk blangko kosong
+    lines_blangko = [
+        f"{init_esc}PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY",
         "UP3 KLATEN                                                    NO. TUL :  ",
-        "ULP TULUNG",
-        "",
+        "ULP TULUNG", "",
         "             PEMBERITAHUAN PELAKSANAAN PEMUTUSAN SEMENTARA SAMBUNGAN TENAGA LISTRIK             ",
         "             ======================================================================             ",
         "Kepada Yth. ",
@@ -356,13 +322,11 @@ def buat_blangko_kosong(init_code, jml_lembar=50, page_lines=44):
         "Alamat            :                                                  ",
         "Nomor Meter       :                                                                ",
         "Nama Gardu/Tiang  :  \t                                      Loket    :              ",
-        "Tarip / Daya      :  \t                                      Kelompok :               ",
-        "",
+        "Tarip / Daya      :  \t                                      Kelompok :               ", "",
         "Rekening :        \t\t\t\t                   Rp. :  ",
         "Jumlah Biaya Keterlambatan s.d bulan :                             Rp. :  ",
         "                                                                        ---------------",
-        "Jumlah Tunggakan (belum termasuk biaya Administrasi)               Rp. :  ",
-        "",
+        "Jumlah Tunggakan (belum termasuk biaya Administrasi)               Rp. :  ", "",
         "   Dengan ini diberitahukan dengan hormat bahwa pada hari ini aliran listrik di rumah/alamat seperti tersebut diatas   ",
         "terpaksa diputus untuk sementara karena rekening listrik belum dilunasi pada waktu yang telah ditetapkan.",
         "Penyambungan kembali akan dilakukan pada setiap hari jam kerja apabila rekening serta biaya keterlambatan dilunasi",
@@ -370,34 +334,21 @@ def buat_blangko_kosong(init_code, jml_lembar=50, page_lines=44):
         "   Apabila dalam jangka waktu 60 hari terhitung sejak dilakukan pemutusan sementara tunggakan belum dilunasi,         ",
         "maka instalasi milik PLN akan dibongkar, dan penyambungan kembali dapat dilaksanakan setelah Saudara menyelesaikan    ",
         "Biaya Penyambungan yang diperlakukan sebagai sambungan baru serta tetap diwajibkan membayar tagihan listrik           ",
-        "yang belum dilunasi beserta dendanya.                     ",
-        "",
-        "UNTUK MENGHINDARI RESIKO, MOHON TIDAK TITIP PEMBAYARAN REKENING KEPADA PETUGAS",
-        "",
+        "yang belum dilunasi beserta dendanya.                     ", "",
+        "UNTUK MENGHINDARI RESIKO, MOHON TIDAK TITIP PEMBAYARAN REKENING KEPADA PETUGAS", "",
         "                                                                           ",
-        "                                                                               ",
-        "",
+        "                                                                               ", "",
         "|------------------------------------------------------|",
         "|       PADA WAKTU MELAKUKAN PEMBAYARAN DIMOHON        |",
         "|         MENUNJUKKAN SURAT PEMBERITAHUAN INI          |",
         "|------------------------------------------------------|",
-        "                              TGL  STAND PUTUS  PELANGGAN        ",
-        "",
+        "                              TGL  STAND PUTUS  PELANGGAN        ", "",
         "A5 TUL VI-01/PETUGAS PEMUTUS...... ... ... ... ...........                   ",
         "ABAIKAN PEMBERITAHUAN INI JIKA SUDAH MEMBAYAR TAGIHAN"
     ]
-    while len(lines) < page_lines:
-        lines.append("")
-    return ("\r\n".join(lines[:page_lines]) + "\r\n") * jml_lembar
+    while len(lines_blangko) < tinggi_halaman: lines_blangko.append("")
+    raw_blanko = ("\r\n".join(lines_blangko[:tinggi_halaman]) + "\r\n") * jml
 
-
-# ================= 4. HALAMAN UTAMA APLIKASI =================
-init_esc = get_printer_init_code(tipe_printer)
-
-if "Tahap 1 Saja" in mode_cetak:
-    st.subheader("📄 Cetak Blangko Kosong (.iconprn)")
-    jml = st.number_input("Jumlah Lembar Blangko:", min_value=1, max_value=1000, value=50)
-    raw_blanko = buat_blangko_kosong(init_esc, jml, tinggi_halaman)
     st.download_button(
         label=f"🖨️ Klik untuk Cetak / Download BLANKO_{jml}_LEMBAR.iconprn",
         data=raw_blanko.encode("latin1", errors="replace"),
@@ -405,7 +356,7 @@ if "Tahap 1 Saja" in mode_cetak:
         mime="application/octet-stream"
     )
 else:
-    # MULTI-UPLOAD: Bisa nge-blok puluhan file sekaligus!
+    # MULTI-UPLOAD: Excel, ZIP, ICONPRN
     uploaded_files = st.file_uploader(
         "📂 Upload File Data (.xlsx, .xls, .iconprn, atau .zip)", 
         type=["xlsx", "xls", "iconprn", "prn", "zip"], 
@@ -422,17 +373,14 @@ else:
             for uploaded_file in uploaded_files:
                 nama_file = uploaded_file.name.lower()
                 
-                # Cek jika ada Excel
                 if nama_file.endswith(('.xlsx', '.xls')):
                     excel_uploaded = True
-                # Ekstrak file ZIP
                 elif nama_file.endswith('.zip'):
                     with zipfile.ZipFile(uploaded_file, 'r') as z:
                         for z_name in z.namelist():
                             if z_name.lower().endswith(('.iconprn', '.prn', '.txt')):
                                 teks_mentah = z.read(z_name).decode('latin1', errors='ignore')
                                 semua_data_iconprn.extend(baca_data_dari_iconprn(teks_mentah))
-                # Ekstrak file ICONPRN lepas
                 else:
                     teks_mentah = uploaded_file.getvalue().decode('latin1', errors='ignore')
                     semua_data_iconprn.extend(baca_data_dari_iconprn(teks_mentah))
@@ -444,26 +392,25 @@ else:
             pilih_sheet = st.selectbox("Pilih Sheet Excel:", xls.sheet_names) if len(xls.sheet_names) > 1 else xls.sheet_names[0]
             df_excel = pd.read_excel(file_excel, sheet_name=pilih_sheet)
             
-            auto_map = deteksi_kolom_otomatis(df_excel.columns.tolist())
-            kolom_hilang = [k for k, v in auto_map.items() if v is None]
-
-            with st.expander("🔗 Pengaturan Pencocokan Kolom Excel", expanded=len(kolom_hilang) > 0):
-                if kolom_hilang:
-                    st.warning(f"⚠️ Ada nama kolom yang berbeda: **{', '.join(kolom_hilang)}**.")
-                else:
-                    st.success("✅ Semua kolom Excel otomatis dikenali!")
-
-                opsi_kolom = ["(Kosongkan)"] + df_excel.columns.tolist()
-                col_map_final = {}
-                cols_ui = st.columns(4)
-                for idx, (field_blangko, terdeteksi) in enumerate(auto_map.items()):
-                    with cols_ui[idx % 4]:
-                        idx_default = opsi_kolom.index(terdeteksi) if terdeteksi in opsi_kolom else 0
-                        col_map_final[field_blangko] = st.selectbox(f"Isian [{field_blangko}]:", opsi_kolom, index=idx_default)
-                        if col_map_final[field_blangko] == "(Kosongkan)": col_map_final[field_blangko] = None
+            # (Pemetaan kolom Excel otomatis yang disembunyikan agar rapi)
+            cols_lower = {c.strip().lower(): c for c in df_excel.columns.tolist()}
+            mapping_sementara = {}
+            for t_col in ['IDPEL', 'Nomor TUL', 'Nama', 'KDDK', 'Gardu/Tiang', 'Loket', 'Alamat', 'Nomor Meter', 'Tarif/Daya', 'Kelompok', 'Bulan Rekening', 'Bulan Keterlambatan', 'Jumlah Rekening', 'Jumlah Denda', 'Jumlah Tunggakan', 'petugas']:
+                kandidat = []
+                if t_col == 'IDPEL': kandidat = ['idpel', 'id pelanggan']
+                elif t_col == 'Nomor TUL': kandidat = ['nomor tul', 'no tul']
+                elif t_col == 'Jumlah Tunggakan': kandidat = ['jumlah tunggakan', 'total']
+                elif t_col == 'Jumlah Rekening': kandidat = ['jumlah rekening', 'tagihan']
+                elif t_col == 'Jumlah Denda': kandidat = ['jumlah denda', 'denda']
+                else: kandidat = [t_col.lower()]
+                
+                found = next((cols_lower[k] for k in kandidat if k in cols_lower), None)
+                mapping_sementara[t_col] = found
+                
+            col_map_final = mapping_sementara
             df = df_excel
 
-        # Logika jika hanya ICONPRN / ZIP yang di-upload
+        # Logika jika ICONPRN / ZIP yang di-upload
         else:
             if semua_data_iconprn:
                 df = pd.DataFrame(semua_data_iconprn)
