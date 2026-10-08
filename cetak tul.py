@@ -6,7 +6,7 @@ import re
 
 st.set_page_config(page_title="Cetak TUL VI-01 PLN ULP Tulung", layout="wide")
 
-st.title("⚡ Aplikasi Cetak TUL VI-01")
+st.title("⚡ Aplikasi Cetak TUL VI-01 (Super Presisi & Cepat)")
 st.caption("PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY - UP3 KLATEN - ULP TULUNG")
 
 # ================= 1. SIDEBAR PENGATURAN =================
@@ -81,7 +81,7 @@ def tentukan_petugas(idpel, tarif_daya, kddk):
     return "BARU"
 
 def baca_data_dari_iconprn(teks_mentah):
-    """Membaca isi file .iconprn dan mengubahnya menjadi format Tabel"""
+    """Membaca isi file .iconprn dan mengubahnya menjadi format Tabel (Kebal M dan g)"""
     hasil = []
     blok_halaman = re.split(r'PEMBERITAHUAN PELAKSANAAN PEMUTUSAN', teks_mentah)
     
@@ -125,17 +125,17 @@ def baca_data_dari_iconprn(teks_mentah):
         m_klp = re.search(r'Kelompok[ \t]*:[ \t]*([^\n\r]*)', blok, re.IGNORECASE)
         if m_klp: data['Kelompok'] = m_klp.group(1).strip()
 
-        m_rek = re.search(r'Rekening[ \t]*:[ \t]*([^\n\r]*?)[ \t]*Rp\.[ \t]*:[ \t]*([\d,\.]+)', blok, re.IGNORECASE)
+        m_rek = re.search(r'Rekening\s*:\s*(.+?)\s*Rp\.\s*:\s*[^0-9\n\r]*([\d,\.]+)', blok, re.IGNORECASE)
         if m_rek:
             data['Bulan Rekening'] = m_rek.group(1).strip()
             data['Jumlah Rekening'] = m_rek.group(2).replace(',', '').replace('.', '').strip()
 
-        m_denda = re.search(r'Jumlah Biaya Keterlambatan s\.d bulan[ \t]*:[ \t]*([^\n\r]*?)[ \t]*Rp\.[ \t]*:[ \t]*([\d,\.]+)', blok, re.IGNORECASE)
+        m_denda = re.search(r'Jumlah Biaya Keterlambatan s\.d bulan\s*:\s*(.+?)\s*Rp\.\s*:\s*[^0-9\n\r]*([\d,\.]+)', blok, re.IGNORECASE)
         if m_denda:
             data['Bulan Keterlambatan'] = m_denda.group(1).strip()
             data['Jumlah Denda'] = m_denda.group(2).replace(',', '').replace('.', '').strip()
 
-        m_tung = re.search(r'Jumlah Tunggakan.*?[ \t]*Rp\.[ \t]*:[ \t]*([\d,\.]+)', blok, re.IGNORECASE)
+        m_tung = re.search(r'Jumlah Tunggakan.*?[ \t]*Rp\.\s*:\s*[^0-9\n\r]*([\d,\.]+)', blok, re.IGNORECASE)
         if m_tung:
             data['Jumlah Tunggakan'] = m_tung.group(1).replace(',', '').replace('.', '').strip()
 
@@ -219,7 +219,7 @@ def ambil_nilai(row, col_map, key, default=""):
     return default
 
 def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_cetak_kota, geser_tgl, offset_x=0, offset_y=0, page_lines=44):
-    """Mencetak HANYA ISIAN DATA persis di koordinat BLANKO.iconprn"""
+    """Mencetak HANYA ISIAN DATA persis di koordinat BLANKO.iconprn (Koordinat Super Presisi)"""
     ESC = "\x1b"
     BOLD_ON = f"{ESC}E"  
     BOLD_OFF = f"{ESC}F" 
@@ -250,11 +250,13 @@ def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_ceta
 
     set_line(1,  f"{'':<73}{no_tul}")
     set_line(7,  f"{'':<21}{nama}")
+    
     set_line(8,  f"{'':<21}{idpel:<58}{kddk}")         
     set_line(9,  f"{'':<21}{alamat}")
     set_line(10, f"{'':<21}{no_meter}")
     set_line(11, f"{'':<21}{gardu:<53}{loket}")        
     set_line(12, f"{'':<21}{tarif:<53}{kelompok}")     
+    
     set_line(14, f"{'':<12}{bln_rek:<66}{rp_rek}")
     set_line(15, f"{'':<39}{bln_lambat:<39}{rp_denda}")
     set_line(17, f"{'':<78}{rp_total}")
@@ -388,6 +390,7 @@ def buat_blangko_kosong(init_code, jml_lembar=50, page_lines=44):
         lines.append("")
     return ("\r\n".join(lines[:page_lines]) + "\r\n") * jml_lembar
 
+
 # ================= 4. HALAMAN UTAMA APLIKASI =================
 init_esc = get_printer_init_code(tipe_printer)
 
@@ -402,53 +405,73 @@ if "Tahap 1 Saja" in mode_cetak:
         mime="application/octet-stream"
     )
 else:
-    uploaded_file = st.file_uploader("📂 Upload File Data (.xlsx, .xls, .iconprn, atau .zip)", type=["xlsx", "xls", "iconprn", "prn", "zip"])
+    # MULTI-UPLOAD: Bisa nge-blok puluhan file sekaligus!
+    uploaded_files = st.file_uploader(
+        "📂 Upload File Data (.xlsx, .xls, .iconprn, atau .zip)", 
+        type=["xlsx", "xls", "iconprn", "prn", "zip"], 
+        accept_multiple_files=True
+    )
 
-    if uploaded_file:
-        nama_file = uploaded_file.name.lower()
+    if uploaded_files:
         df = None
         col_map_final = None 
+        semua_data_iconprn = []
+        excel_uploaded = False
 
         with st.spinner("Memproses file masukan..."):
-            if nama_file.endswith('.xlsx') or nama_file.endswith('.xls'):
-                xls = pd.ExcelFile(uploaded_file)
-                pilih_sheet = st.selectbox("Pilih Sheet Excel:", xls.sheet_names) if len(xls.sheet_names) > 1 else xls.sheet_names[0]
-                df = pd.read_excel(uploaded_file, sheet_name=pilih_sheet)
+            for uploaded_file in uploaded_files:
+                nama_file = uploaded_file.name.lower()
                 
-                auto_map = deteksi_kolom_otomatis(df.columns.tolist())
-                kolom_hilang = [k for k, v in auto_map.items() if v is None]
+                # Cek jika ada Excel
+                if nama_file.endswith(('.xlsx', '.xls')):
+                    excel_uploaded = True
+                # Ekstrak file ZIP
+                elif nama_file.endswith('.zip'):
+                    with zipfile.ZipFile(uploaded_file, 'r') as z:
+                        for z_name in z.namelist():
+                            if z_name.lower().endswith(('.iconprn', '.prn', '.txt')):
+                                teks_mentah = z.read(z_name).decode('latin1', errors='ignore')
+                                semua_data_iconprn.extend(baca_data_dari_iconprn(teks_mentah))
+                # Ekstrak file ICONPRN lepas
+                else:
+                    teks_mentah = uploaded_file.getvalue().decode('latin1', errors='ignore')
+                    semua_data_iconprn.extend(baca_data_dari_iconprn(teks_mentah))
+                    
+        # Logika jika yang di-upload berupa Excel
+        if excel_uploaded:
+            file_excel = next(f for f in uploaded_files if f.name.lower().endswith(('.xlsx', '.xls')))
+            xls = pd.ExcelFile(file_excel)
+            pilih_sheet = st.selectbox("Pilih Sheet Excel:", xls.sheet_names) if len(xls.sheet_names) > 1 else xls.sheet_names[0]
+            df_excel = pd.read_excel(file_excel, sheet_name=pilih_sheet)
+            
+            auto_map = deteksi_kolom_otomatis(df_excel.columns.tolist())
+            kolom_hilang = [k for k, v in auto_map.items() if v is None]
 
-                with st.expander("🔗 Pengaturan Pencocokan Kolom Excel", expanded=len(kolom_hilang) > 0):
-                    if kolom_hilang:
-                        st.warning(f"⚠️ Ada nama kolom yang berbeda: **{', '.join(kolom_hilang)}**. Silakan pilih:")
-                    else:
-                        st.success("✅ Semua kolom Excel otomatis dikenali!")
+            with st.expander("🔗 Pengaturan Pencocokan Kolom Excel", expanded=len(kolom_hilang) > 0):
+                if kolom_hilang:
+                    st.warning(f"⚠️ Ada nama kolom yang berbeda: **{', '.join(kolom_hilang)}**.")
+                else:
+                    st.success("✅ Semua kolom Excel otomatis dikenali!")
 
-                    opsi_kolom = ["(Kosongkan)"] + df.columns.tolist()
-                    col_map_final = {}
-                    cols_ui = st.columns(4)
-                    for idx, (field_blangko, terdeteksi) in enumerate(auto_map.items()):
-                        with cols_ui[idx % 4]:
-                            idx_default = opsi_kolom.index(terdeteksi) if terdeteksi in opsi_kolom else 0
-                            col_map_final[field_blangko] = st.selectbox(f"Isian [{field_blangko}]:", opsi_kolom, index=idx_default)
-                            if col_map_final[field_blangko] == "(Kosongkan)": col_map_final[field_blangko] = None
+                opsi_kolom = ["(Kosongkan)"] + df_excel.columns.tolist()
+                col_map_final = {}
+                cols_ui = st.columns(4)
+                for idx, (field_blangko, terdeteksi) in enumerate(auto_map.items()):
+                    with cols_ui[idx % 4]:
+                        idx_default = opsi_kolom.index(terdeteksi) if terdeteksi in opsi_kolom else 0
+                        col_map_final[field_blangko] = st.selectbox(f"Isian [{field_blangko}]:", opsi_kolom, index=idx_default)
+                        if col_map_final[field_blangko] == "(Kosongkan)": col_map_final[field_blangko] = None
+            df = df_excel
 
-            elif nama_file.endswith('.zip'):
-                with zipfile.ZipFile(uploaded_file, 'r') as z:
-                    semua_data_zip = []
-                    for z_name in z.namelist():
-                        if z_name.lower().endswith(('.iconprn', '.prn', '.txt')):
-                            teks_mentah = z.read(z_name).decode('latin1', errors='ignore')
-                            semua_data_zip.extend(baca_data_dari_iconprn(teks_mentah))
-                    df = pd.DataFrame(semua_data_zip)
-                st.success(f"✅ Berhasil membaca {len(df)} tagihan dari dalam file ZIP!")
-
-            else:
-                teks_mentah = uploaded_file.getvalue().decode('latin1', errors='ignore')
-                df = pd.DataFrame(baca_data_dari_iconprn(teks_mentah))
-                st.success(f"✅ Berhasil membaca {len(df)} tagihan langsung dari file .iconprn!")
-
+        # Logika jika hanya ICONPRN / ZIP yang di-upload
+        else:
+            if semua_data_iconprn:
+                df = pd.DataFrame(semua_data_iconprn)
+                
+        # --- PROSES LANJUTAN UNTUK CETAK ---
         if df is not None and len(df) > 0:
+            st.success(f"✅ Berhasil memuat {len(df)} tagihan pelanggan!")
+            
             kol_petugas = col_map_final.get("petugas") if col_map_final else "petugas"
             
             if kol_petugas and kol_petugas in df.columns:
