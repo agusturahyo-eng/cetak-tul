@@ -47,7 +47,7 @@ jabatan = st.sidebar.text_input("Jabatan", value="MANAGER")
 nama_manager = st.sidebar.text_input("Nama Manager (Dicetak Tebal)", value="MARTONO AJI PRABOWO")
 
 
-# ================= 2. FUNGSI EKSTRAKSI DATA DARI .ICONPRN (DARI TAB 5) =================
+# ================= 2. FUNGSI EKSTRAKSI DATA DARI .ICONPRN =================
 def tentukan_petugas(idpel, tarif_daya, kddk):
     daya = 0
     match_daya = re.search(r'/(\d+)', str(tarif_daya))
@@ -146,6 +146,43 @@ def baca_data_dari_iconprn(teks_mentah):
         hasil.append(data)
     return hasil
 
+# ================= 2A. FUNGSI DETEKSI KOLOM EXCEL PINTAR =================
+STANDAR_KOLOM = {
+    "IDPEL": ["idpel", "id pelanggan", "id_pelanggan", "no pelanggan"],
+    "Nomor TUL": ["nomor tul", "no tul", "no. tul", "nomor_tul"],
+    "Nama": ["nama", "nama pelanggan", "nama_pelanggan"],
+    "KDDK": ["kddk", "kode kedudukan", "kedudukan"],
+    "Gardu/Tiang": ["gardu/tiang", "gardu", "nama gardu/tiang", "gardutiang", "tiang"],
+    "Loket": ["loket", "kode loket"],
+    "Alamat": ["alamat", "alamat pelanggan"],
+    "Nomor Meter": ["nomor meter", "no meter", "nomor_meter", "nomormeter"],
+    "Tarif/Daya": ["tarif/daya", "tarip / daya", "tarifdaya", "tarif", "daya"],
+    "Kelompok": ["kelompok", "klp"],
+    "Bulan Rekening": ["bulan rekening", "bulan_rekening", "rekening", "blth"],
+    "Bulan Keterlambatan": ["bulan keterlambatan", "bulan_keterlambatan", "keterlambatan"],
+    "Jumlah Rekening": ["jumlah rekening", "jumlah_rekening", "jumlah_rekening_", "rp rekening", "tagihan"],
+    "Jumlah Denda": ["jumlah denda", "jumlah_denda", "jumlah_denda_", "denda", "bk", "biaya keterlambatan"],
+    "Jumlah Tunggakan": ["jumlah tunggakan", "jumlah_tunggakan", "jumlah_tunggakan_", "total", "total tunggakan"],
+    "petugas": ["petugas", "kode petugas", "nama petugas", "cater"]
+}
+
+def deteksi_kolom_otomatis(df_cols):
+    mapping = {}
+    cols_lower = {c.strip().lower(): c for c in df_cols}
+    for target, kandidat_list in STANDAR_KOLOM.items():
+        found = None
+        for k in kandidat_list:
+            if k in cols_lower:
+                found = cols_lower[k]
+                break
+        if not found:
+            for c_low, c_orig in cols_lower.items():
+                if any(k in c_low for k in kandidat_list):
+                    found = c_orig
+                    break
+        mapping[target] = found
+    return mapping
+
 # ================= 3. FUNGSI GENERATOR FILE .ICONPRN =================
 def get_printer_init_code(printer_choice):
     ESC = "\x1b"
@@ -195,7 +232,7 @@ def buat_isian_blangko(row, col_map, init_code, kota, tgl, jab, manager, is_ceta
     bln_rek = ambil_nilai(row, col_map, "Bulan Rekening")
     bln_lambat = ambil_nilai(row, col_map, "Bulan Keterlambatan")
 
-    # FORMAT RUPIAH DIBUAT RATA KANAN (Mepet Kanan dengan panjang 15 Karakter)
+    # FORMAT RUPIAH DIBUAT RATA KANAN (15 Karakter)
     rp_rek = format_rupiah(ambil_nilai(row, col_map, "Jumlah Rekening", "0")).rjust(15)
     rp_denda = format_rupiah(ambil_nilai(row, col_map, "Jumlah Denda", "0")).rjust(15)
     rp_total = format_rupiah(ambil_nilai(row, col_map, "Jumlah Tunggakan", "0")).rjust(15)
@@ -250,7 +287,6 @@ def buat_blangko_dan_isi(row, col_map, init_code, kota, tgl, jab, manager, page_
     bln_rek = ambil_nilai(row, col_map, "Bulan Rekening")
     bln_lambat = ambil_nilai(row, col_map, "Bulan Keterlambatan")
 
-    # RUPIAH RATA KANAN (15 Karakter)
     rp_rek = format_rupiah(ambil_nilai(row, col_map, "Jumlah Rekening", "0")).rjust(15)
     rp_denda = format_rupiah(ambil_nilai(row, col_map, "Jumlah Denda", "0")).rjust(15)
     rp_total = format_rupiah(ambil_nilai(row, col_map, "Jumlah Tunggakan", "0")).rjust(15)
@@ -302,16 +338,9 @@ def buat_blangko_dan_isi(row, col_map, init_code, kota, tgl, jab, manager, page_
         lines.append("")
     return "\r\n".join(lines[:page_lines]) + "\r\n"
 
-# ================= 4. HALAMAN UTAMA APLIKASI =================
-init_esc = get_printer_init_code(tipe_printer)
-
-if "Tahap 1 Saja" in mode_cetak:
-    st.subheader("📄 Cetak Blangko Kosong (.iconprn)")
-    jml = st.number_input("Jumlah Lembar Blangko:", min_value=1, max_value=1000, value=50)
-    
-    # Fungsi ringkas untuk blangko kosong
-    lines_blangko = [
-        f"{init_esc}PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY",
+def buat_blangko_kosong(init_code, jml_lembar=50, page_lines=44):
+    lines = [
+        f"{init_code}PT. PLN (PERSERO) UID JAWA TENGAH DAN DIY",
         "UP3 KLATEN                                                    NO. TUL :  ",
         "ULP TULUNG", "",
         "             PEMBERITAHUAN PELAKSANAAN PEMUTUSAN SEMENTARA SAMBUNGAN TENAGA LISTRIK             ",
@@ -346,9 +375,18 @@ if "Tahap 1 Saja" in mode_cetak:
         "A5 TUL VI-01/PETUGAS PEMUTUS...... ... ... ... ...........                   ",
         "ABAIKAN PEMBERITAHUAN INI JIKA SUDAH MEMBAYAR TAGIHAN"
     ]
-    while len(lines_blangko) < tinggi_halaman: lines_blangko.append("")
-    raw_blanko = ("\r\n".join(lines_blangko[:tinggi_halaman]) + "\r\n") * jml
+    while len(lines) < page_lines:
+        lines.append("")
+    return ("\r\n".join(lines[:page_lines]) + "\r\n") * jml_lembar
 
+
+# ================= 4. HALAMAN UTAMA APLIKASI =================
+init_esc = get_printer_init_code(tipe_printer)
+
+if "Tahap 1 Saja" in mode_cetak:
+    st.subheader("📄 Cetak Blangko Kosong (.iconprn)")
+    jml = st.number_input("Jumlah Lembar Blangko:", min_value=1, max_value=1000, value=50)
+    raw_blanko = buat_blangko_kosong(init_esc, jml, tinggi_halaman)
     st.download_button(
         label=f"🖨️ Klik untuk Cetak / Download BLANKO_{jml}_LEMBAR.iconprn",
         data=raw_blanko.encode("latin1", errors="replace"),
@@ -356,7 +394,7 @@ if "Tahap 1 Saja" in mode_cetak:
         mime="application/octet-stream"
     )
 else:
-    # MULTI-UPLOAD: Excel, ZIP, ICONPRN
+    # MULTI-UPLOAD: Bisa nge-blok puluhan file sekaligus!
     uploaded_files = st.file_uploader(
         "📂 Upload File Data (.xlsx, .xls, .iconprn, atau .zip)", 
         type=["xlsx", "xls", "iconprn", "prn", "zip"], 
@@ -373,14 +411,17 @@ else:
             for uploaded_file in uploaded_files:
                 nama_file = uploaded_file.name.lower()
                 
+                # Cek jika ada Excel
                 if nama_file.endswith(('.xlsx', '.xls')):
                     excel_uploaded = True
+                # Ekstrak file ZIP
                 elif nama_file.endswith('.zip'):
                     with zipfile.ZipFile(uploaded_file, 'r') as z:
                         for z_name in z.namelist():
                             if z_name.lower().endswith(('.iconprn', '.prn', '.txt')):
                                 teks_mentah = z.read(z_name).decode('latin1', errors='ignore')
                                 semua_data_iconprn.extend(baca_data_dari_iconprn(teks_mentah))
+                # Ekstrak file ICONPRN lepas
                 else:
                     teks_mentah = uploaded_file.getvalue().decode('latin1', errors='ignore')
                     semua_data_iconprn.extend(baca_data_dari_iconprn(teks_mentah))
@@ -392,25 +433,27 @@ else:
             pilih_sheet = st.selectbox("Pilih Sheet Excel:", xls.sheet_names) if len(xls.sheet_names) > 1 else xls.sheet_names[0]
             df_excel = pd.read_excel(file_excel, sheet_name=pilih_sheet)
             
-            # (Pemetaan kolom Excel otomatis yang disembunyikan agar rapi)
-            cols_lower = {c.strip().lower(): c for c in df_excel.columns.tolist()}
-            mapping_sementara = {}
-            for t_col in ['IDPEL', 'Nomor TUL', 'Nama', 'KDDK', 'Gardu/Tiang', 'Loket', 'Alamat', 'Nomor Meter', 'Tarif/Daya', 'Kelompok', 'Bulan Rekening', 'Bulan Keterlambatan', 'Jumlah Rekening', 'Jumlah Denda', 'Jumlah Tunggakan', 'petugas']:
-                kandidat = []
-                if t_col == 'IDPEL': kandidat = ['idpel', 'id pelanggan']
-                elif t_col == 'Nomor TUL': kandidat = ['nomor tul', 'no tul']
-                elif t_col == 'Jumlah Tunggakan': kandidat = ['jumlah tunggakan', 'total']
-                elif t_col == 'Jumlah Rekening': kandidat = ['jumlah rekening', 'tagihan']
-                elif t_col == 'Jumlah Denda': kandidat = ['jumlah denda', 'denda']
-                else: kandidat = [t_col.lower()]
-                
-                found = next((cols_lower[k] for k in kandidat if k in cols_lower), None)
-                mapping_sementara[t_col] = found
-                
-            col_map_final = mapping_sementara
+            auto_map = deteksi_kolom_otomatis(df_excel.columns.tolist())
+            kolom_hilang = [k for k, v in auto_map.items() if v is None]
+
+            # MENU PENCOCOKAN KOLOM DIKEMBALIKAN!
+            with st.expander("🔗 Pengaturan Pencocokan Kolom Excel", expanded=len(kolom_hilang) > 0):
+                if kolom_hilang:
+                    st.warning(f"⚠️ Ada nama kolom yang berbeda: **{', '.join(kolom_hilang)}**. Silakan pilih manual:")
+                else:
+                    st.success("✅ Semua kolom Excel otomatis dikenali!")
+
+                opsi_kolom = ["(Kosongkan)"] + df_excel.columns.tolist()
+                col_map_final = {}
+                cols_ui = st.columns(4)
+                for idx, (field_blangko, terdeteksi) in enumerate(auto_map.items()):
+                    with cols_ui[idx % 4]:
+                        idx_default = opsi_kolom.index(terdeteksi) if terdeteksi in opsi_kolom else 0
+                        col_map_final[field_blangko] = st.selectbox(f"Isian [{field_blangko}]:", opsi_kolom, index=idx_default)
+                        if col_map_final[field_blangko] == "(Kosongkan)": col_map_final[field_blangko] = None
             df = df_excel
 
-        # Logika jika ICONPRN / ZIP yang di-upload
+        # Logika jika hanya ICONPRN / ZIP yang di-upload
         else:
             if semua_data_iconprn:
                 df = pd.DataFrame(semua_data_iconprn)
